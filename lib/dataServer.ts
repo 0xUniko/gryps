@@ -23,8 +23,26 @@ class PoolReserve {
   lpInfo?: ReturnType<typeof liquidityStateV4Layout.decode>;
   baseVaultListener?: number;
   quoteVaultListener?: number;
+  lpInfoListener?: number;
+
+  async cleanup() {
+    if (this.baseVaultListener !== undefined) {
+      await connection.removeAccountChangeListener(this.baseVaultListener);
+      this.baseVaultListener = undefined;
+    }
+    if (this.quoteVaultListener !== undefined) {
+      await connection.removeAccountChangeListener(this.quoteVaultListener);
+      this.quoteVaultListener = undefined;
+    }
+    if (this.lpInfoListener !== undefined) {
+      await connection.removeAccountChangeListener(this.lpInfoListener);
+      this.lpInfoListener = undefined;
+    }
+  }
 
   async init(poolId: string) {
+    await this.cleanup();
+
     const { poolRpcData } = await raydium.liquidity.getPoolInfoFromRpc({
       poolId,
     });
@@ -52,7 +70,7 @@ class PoolReserve {
       }
     );
 
-    connection.onAccountChange(
+    this.lpInfoListener = connection.onAccountChange(
       new PublicKey(poolId),
       async (accountInfo) => {
         const lpInfo = liquidityStateV4Layout.decode(accountInfo.data);
@@ -138,6 +156,15 @@ const poolReserve = new PoolReserve();
 
 class JitoTip {
   jitoTip?: number;
+  private updateInterval?: NodeJS.Timeout;
+
+  async cleanup() {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = undefined;
+    }
+  }
+
   async init(
     tick:
       | "landed_tips_25th_percentile"
@@ -147,8 +174,10 @@ class JitoTip {
       | "landed_tips_99th_percentile"
       | "ema_landed_tips_50th_percentile" = "ema_landed_tips_50th_percentile"
   ) {
+    await this.cleanup();
+
     this.jitoTip = await getTip(tick);
-    setInterval(async () => {
+    this.updateInterval = setInterval(async () => {
       this.jitoTip = await getTip(tick);
     }, 600000);
   }
