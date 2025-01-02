@@ -1,7 +1,11 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { initData, useSignal, type User } from "@telegram-apps/sdk-react";
-import { ReactNode, useMemo } from "react";
+import assert from "assert";
+import { ReactNode, useMemo, useState } from "react";
 
 export type DisplayDataRow = { title: string } & (
   | { type: "link"; value?: string }
@@ -23,7 +27,26 @@ function getUserRows(user: User): DisplayDataRow[] {
   ];
 }
 
+async function init(poolId: string) {
+  const response = await fetch("/api/init", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ poolId }),
+  });
+
+  if (!response.ok) {
+    throw new Error("初始化失败");
+  }
+
+  return response.json();
+}
+
 export default function Home() {
+  const [poolId, setPoolId] = useState("");
+  const { toast } = useToast();
+
   const initDataRaw = useSignal(initData.raw);
   const initDataState = useSignal(initData.state);
 
@@ -84,6 +107,30 @@ export default function Home() {
     ];
   }, [initData]);
 
+  const [loading, setLoading] = useState(false);
+  const handleInitClick = async () => {
+    if (!poolId) return;
+
+    setLoading(true);
+    try {
+      const res = await init(poolId);
+      assert(res.msg === "success", res.msg);
+      toast({
+        title: "成功",
+        description: "初始化成功",
+      });
+    } catch (error) {
+      console.error("Error:", error);
+      toast({
+        variant: "destructive",
+        title: "错误",
+        description: error instanceof Error ? error.message : "初始化失败",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!initDataRows) {
     return (
       <>
@@ -99,6 +146,20 @@ export default function Home() {
   }
   return (
     <div>
+      <div className="mb-8 space-y-4">
+        <h2>初始化池子</h2>
+        <div className="flex gap-4 max-w-md">
+          <Input
+            placeholder="输入Pool ID"
+            value={poolId}
+            onChange={(e) => setPoolId(e.target.value)}
+          />
+          <Button onClick={handleInitClick} disabled={loading || !poolId}>
+            {loading ? "初始化中..." : "初始化"}
+          </Button>
+        </div>
+      </div>
+
       <div>
         <h2>Init Data</h2>
         {initDataRows.map((row, i) => (

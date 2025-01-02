@@ -1,10 +1,10 @@
-import * as grpc from "@grpc/grpc-js";
-import * as protoLoader from "@grpc/proto-loader";
 import { Raydium, liquidityStateV4Layout } from "@raydium-io/raydium-sdk-v2";
 import { AccountLayout } from "@solana/spl-token";
 import { Connection, PublicKey } from "@solana/web3.js";
 import assert from "assert";
 import BN from "bn.js";
+import { Hono } from "hono";
+import { bearerAuth } from "hono/bearer-auth";
 import { getTip } from "./jito";
 
 const connection = new Connection(process.env.HELIUS_RPC!);
@@ -152,11 +152,9 @@ class PoolReserve {
   }
 }
 
-const poolReserve = new PoolReserve();
-
 class JitoTip {
   jitoTip?: number;
-  private updateInterval?: NodeJS.Timeout;
+  private updateInterval?: Timer;
 
   async cleanup() {
     if (this.updateInterval) {
@@ -188,48 +186,79 @@ class JitoTip {
   }
 }
 
+const poolReserve = new PoolReserve();
 const jitoTip = new JitoTip();
+await jitoTip.init();
 
-const getRpcPoolInfoDefinition = protoLoader.loadSync("data.proto", {
-  keepCase: true,
-  longs: String,
-  enums: String,
-  defaults: true,
-  oneofs: true,
-});
-const dataServer = grpc.loadPackageDefinition(getRpcPoolInfoDefinition);
-
-const server = new grpc.Server();
-
-server.addService(dataServer.DataService.service, {
-  Init: async (call, callback) => {
-    console.log("initing...");
-    await poolReserve.init(call.request.pool_id);
-    await jitoTip.init(call.request.jito_tip_tick);
-    callback(null, { msg: "success" });
-  },
-  GetReserve: (call, callback) => {
-    const { base_reserve, quote_reserve, status } = poolReserve.value;
-    callback(null, {
-      base_reserve,
-      quote_reserve,
-      status,
-    });
-  },
-  GetJitoTip: (call, callback) => {
-    callback(null, {
-      tip: jitoTip.value,
-    });
-  },
-});
-
-server.bindAsync(
-  "localhost:50051",
-  grpc.ServerCredentials.createInsecure(),
-  (err, port) => {
-    if (err != null) {
-      console.error("Failed to bind server:", err);
-    }
-    console.log("Server listening on port:", port);
-  }
+const app = new Hono();
+app.use(
+  "/*",
+  bearerAuth({ token: Buffer.from(process.env.HELIUS_RPC!).toString("base64") })
 );
+
+app.post("/pool/init", async (c) => {
+  try {
+    const { pool_id } = await c.req.json();
+    console.log("initing pool...");
+    await poolReserve.init(pool_id);
+    return c.json({
+      msg: "success",
+      data: null,
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
+app.post("/jito/init", async (c) => {
+  try {
+    const { jito_tip_tick } = await c.req.json();
+    console.log("initing jito tip...");
+    await jitoTip.init(jito_tip_tick);
+    return c.json({
+      msg: "success",
+      data: null,
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
+app.get("/reserve", (c) => {
+  try {
+    return c.json({
+      msg: "success",
+      data: poolReserve.value,
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
+app.get("/jito-tip", (c) => {
+  try {
+    return c.json({
+      msg: "success",
+      data: jitoTip.value,
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
+export default {
+  port: 8333,
+  fetch: app.fetch,
+};
