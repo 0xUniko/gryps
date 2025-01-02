@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+service DataService {
+  rpc Init(InitParams) returns (InitRes) {}
+  rpc GetReserve(google.protobuf.Empty) returns (Reserve) {}
+  rpc GetJitoTip(google.protobuf.Empty) returns (JitoTip) {}
+}
+
+message InitParams {
+  string pool_id = 1;
+  string jito_tip_tick = 2;
+}
+
+message InitRes {
+  string msg = 1;
+}
+
+message Reserve {
+  string base_reserve = 1;
+  string quote_reserve = 2;
+  string status = 3;
+}
+
+message JitoTip {
+  int64 tip = 1;
+}
