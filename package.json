@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"bun https-proxy.js\" \"bun --watch lib/dataServer.ts\" \"next dev --turbopack\"",
+    "dev": "concurrently \"bun --watch lib/dataServer.ts\" \"next dev --turbopack\"",
+    "dev:https": "concurrently \"bun https-proxy.js\" \"bun --watch lib/dataServer.ts\" \"next dev --turbopack\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -28,6 +29,7 @@
     "next": "15.1.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7"
   },
