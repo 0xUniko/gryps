@@ -14,11 +14,17 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({ pool_id: poolId }),
     });
-    return NextResponse.json(await data.json());
-    // return NextResponse.json({ message: "API路由测试成功" });
+    const responseData = await data.json();
+    return NextResponse.json({
+      msg: "success",
+      data: responseData,
+    });
   } catch (error) {
     return NextResponse.json(
-      { error: "初始化失败", details: String(error) },
+      {
+        msg: error instanceof Error ? error.message : "初始化失败",
+        data: null,
+      },
       { status: 500 }
     );
   }
