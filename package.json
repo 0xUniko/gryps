@@ -14,6 +14,10 @@
     "@radix-ui/react-toast": "^1.2.4",
     "@raydium-io/raydium-sdk-v2": "^0.1.99-alpha",
     "@solana/spl-token": "^0.4.9",
+    "@solana/wallet-adapter-base": "^0.9.23",
+    "@solana/wallet-adapter-react": "^0.15.35",
+    "@solana/wallet-adapter-react-ui": "^0.9.35",
+    "@solana/wallet-adapter-wallets": "^0.19.32",
     "@solana/web3.js": "^1.98.0",
     "@telegram-apps/sdk-react": "^2.0.23",
     "bip39": "^3.1.0",
@@ -29,7 +33,6 @@
     "next": "15.1.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7"
   },
@@ -45,6 +48,14 @@
     "typescript": "^5"
   },
   "trustedDependencies": [
-    "protobufjs"
+    "bigint-buffer",
+    "blake-hash",
+    "bufferutil",
+    "keccak",
+    "protobufjs",
+    "sharp",
+    "tiny-secp256k1",
+    "usb",
+    "utf-8-validate"
   ]
 }

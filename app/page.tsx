@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import assert from "assert";
 import { useEffect, useState } from "react";
 
@@ -117,6 +118,10 @@ export default function Home() {
 
   return (
     <div className="container mx-auto p-4 space-y-8">
+      <div className="flex justify-end mb-4">
+        <WalletMultiButton />
+      </div>
+
       <div className="mb-8 space-y-4">
         <h2 className="text-2xl font-bold">初始化池子</h2>
         <div className="flex gap-4 max-w-md">
