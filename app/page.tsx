@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import assert from "assert";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 async function init(poolId: string) {
   const response = await fetch("/api/init", {
@@ -33,7 +33,9 @@ async function init(poolId: string) {
 }
 
 export default function Home() {
-  const [poolId, setPoolId] = useState("");
+  const [poolId, setPoolId] = useState(
+    "4ZRWV4zp9C5BxSgUVMAj4fqpJ2h1azL4yBWASjisoEbL"
+  );
   const [wallets, setWallets] = useState<
     Array<{ id: number; address: string; created_at: string }>
   >([]);
@@ -118,17 +120,7 @@ export default function Home() {
 
   // 添加处理连接钱包的函数
   const handleWalletConnect = async () => {
-    if (connected && !isAuthenticated) {
-      try {
-        if (await authenticate()) await fetchWallets();
-      } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "错误",
-          description: "钱包验证失败",
-        });
-      }
-    }
+    const token = await authenticate();
   };
 
   if (!isAuthenticated) {
