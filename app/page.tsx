@@ -10,6 +10,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import assert from "assert";
 import { useEffect, useState } from "react";
@@ -39,6 +41,8 @@ export default function Home() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [addingWallets, setAddingWallets] = useState(false);
+  const { isAuthenticated, authenticate } = useAuth();
+  const { connected } = useWallet();
 
   // 获取钱包列表
   const fetchWallets = async () => {
@@ -52,10 +56,6 @@ export default function Home() {
       console.error("获取钱包列表失败:", error);
     }
   };
-
-  useEffect(() => {
-    fetchWallets();
-  }, []);
 
   // 批量添加钱包
   const handleAddWallets = async () => {
@@ -115,6 +115,38 @@ export default function Home() {
       setLoading(false);
     }
   };
+
+  // 添加处理连接钱包的函数
+  const handleWalletConnect = async () => {
+    if (connected && !isAuthenticated) {
+      try {
+        if (await authenticate()) await fetchWallets();
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "错误",
+          description: "钱包验证失败",
+        });
+      }
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="container mx-auto p-4 flex flex-col items-center justify-center min-h-screen space-y-4">
+        <h1 className="text-2xl font-bold">请连接并验证您的钱包</h1>
+        {connected && !isAuthenticated && (
+          <Button
+            onClick={handleWalletConnect}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            点击进行签名验证
+          </Button>
+        )}
+        <WalletMultiButton />
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4 space-y-8">
