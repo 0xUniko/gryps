@@ -10,6 +10,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -22,6 +29,7 @@ import { NATIVE_MINT } from "@solana/spl-token";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { signOut } from "./actions/auth";
 
@@ -40,12 +48,18 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [addingWallets, setAddingWallets] = useState(false);
   const [walletAmount, setWalletAmount] = useState<number>(1);
+  const [formDataList, setFormDataList] = useState([
+    {
+      walletId: 0,
+      side: "buy" as "buy" | "sell",
+      amount: 0,
+    },
+  ]);
 
-  const { disconnecting } =
-    useWallet();
+  const { disconnecting } = useWallet();
   useEffect(() => {
     if (disconnecting) {
-      signOut()
+      signOut();
     }
   }, [disconnecting]);
 
@@ -177,6 +191,37 @@ export default function Home() {
     }
   };
 
+  const addForm = () => {
+    if (formDataList.length < 5) {
+      setFormDataList([
+        ...formDataList,
+        {
+          walletId: 0,
+          side: "buy" as "buy" | "sell",
+          amount: 0,
+        },
+      ]);
+    }
+  };
+
+  const removeForm = (index: number) => {
+    setFormDataList(formDataList.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async () => {
+    try {
+      // 这里处理多个表单的提交
+      console.log("提交交易:", formDataList);
+    } catch (error) {
+      console.error("交易错误:", error);
+      toast({
+        variant: "destructive",
+        title: "错误",
+        description: error instanceof Error ? error.message : "交易失败",
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 space-y-8">
       <div className="flex justify-end mb-4">
@@ -204,6 +249,7 @@ export default function Home() {
             获取钱包列表和余额
           </Button>
         </div>
+
         <div className="grid grid-cols-1 gap-4">
           <div className="border rounded-lg">
             <Table>
@@ -249,6 +295,97 @@ export default function Home() {
               {addingWallets ? "创建中..." : "批量添加钱包"}
             </Button>
           </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-4">
+        {formDataList.map((formData, index) => (
+          <div key={index} className="space-y-4 border p-4 rounded-lg relative">
+            {formDataList.length > 1 && (
+              <Button
+                variant="destructive"
+                size="icon"
+                className="absolute right-2 top-2"
+                onClick={() => removeForm(index)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+
+            <div>
+              <label className="text-sm font-medium">钱包 ID</label>
+              <Input
+                type="number"
+                value={formData.walletId}
+                onChange={(e) =>
+                  setFormDataList(
+                    formDataList.map((item, i) =>
+                      i === index
+                        ? { ...item, walletId: parseInt(e.target.value) }
+                        : item
+                    )
+                  )
+                }
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">交易类型</label>
+              <Select
+                value={formData.side}
+                onValueChange={(value: "buy" | "sell") =>
+                  setFormDataList(
+                    formDataList.map((item, i) =>
+                      i === index ? { ...item, side: value } : item
+                    )
+                  )
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="选择交易类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="buy">买入</SelectItem>
+                  <SelectItem value="sell">卖出</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">数量</label>
+              <Input
+                type="number"
+                step="0.000001"
+                value={formData.amount}
+                onChange={(e) =>
+                  setFormDataList(
+                    formDataList.map((item, i) =>
+                      i === index
+                        ? { ...item, amount: parseFloat(e.target.value) }
+                        : item
+                    )
+                  )
+                }
+                className="mt-1"
+              />
+            </div>
+          </div>
+        ))}
+
+        <div className="flex gap-4">
+          <Button
+            onClick={addForm}
+            disabled={formDataList.length >= 5}
+            variant="outline"
+            className="w-full"
+          >
+            添加交易表单 ({formDataList.length}/5)
+          </Button>
+
+          <Button onClick={handleSubmit} className="w-full">
+            批量提交交易
+          </Button>
         </div>
       </div>
     </div>
