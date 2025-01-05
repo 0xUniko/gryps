@@ -75,7 +75,7 @@ async function getJitoTipAccount() {
 }
 
 async function getWallets(user: string) {
-  const data = await fetch(`http://localhost:8333/wallets?user=${user}`, {
+  const data = await fetch(`http://localhost:8333/wallets/cache?user=${user}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",

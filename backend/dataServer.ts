@@ -320,17 +320,13 @@ app.get("/jito-tip-account", (c) => {
 
 type Wallet = {
   id: number;
+  address: string;
   mnemonic: string;
+  created_at: string;
 };
 
 class WalletCache {
-  private storage: Map<
-    string,
-    {
-      value: Wallet[];
-      expiry: number;
-    }
-  >;
+  private storage: Map<string, Wallet[]>;
 
   constructor() {
     this.storage = new Map();
@@ -342,7 +338,7 @@ class WalletCache {
       return cached;
     } else {
       let query = `
-    SELECT id, mnemonic FROM wallet 
+    SELECT id, address, mnemonic, created_at FROM wallet 
     WHERE closed_at IS NULL
     AND user = ?
     AND closed_at IS NULL
@@ -351,28 +347,13 @@ class WalletCache {
 
       const wallets = db.prepare(query).all(user) as Wallet[];
 
-      this.set(user, wallets);
+      this.storage.set(user, wallets);
       return wallets;
     }
   }
 
-  set(user: string, value: Wallet[], ttl: number = 24 * 60 * 60) {
-    this.storage.set(user, {
-      value,
-      expiry: Date.now() + ttl * 1000,
-    });
-  }
-
   get(key: string) {
-    const item = this.storage.get(key);
-    if (!item) return null;
-
-    if (Date.now() > item.expiry) {
-      this.storage.delete(key);
-      return null;
-    }
-
-    return item.value;
+    return this.storage.get(key);
   }
 
   delete(key: string) {
@@ -386,6 +367,22 @@ app.get("/wallets", (c) => {
   try {
     const { user } = c.req.query();
     const wallets = walletCache.getWallets(user);
+    return c.json({
+      msg: "success",
+      data: wallets,
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
+app.get("/wallets/cache", async (c) => {
+  try {
+    const { user } = c.req.query();
+    const wallets = walletCache.get(user);
     return c.json({
       msg: "success",
       data: wallets,
