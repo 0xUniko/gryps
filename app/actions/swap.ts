@@ -160,7 +160,7 @@ async function buildSwapTx(
   });
 }
 
-async function batchSendTx(
+export async function batchSendTx(
   tokenMint: string,
   tradeParams: {
     // keypair: Keypair;
@@ -190,6 +190,7 @@ async function batchSendTx(
       data: null,
     };
   }
+  console.dir(poolInfo);
   const baseIn = tokenMint === poolInfo.mintA.address;
 
   const { msg: getWalletsMsg, data: wallets } = await getWallets(pubkey);
@@ -319,16 +320,16 @@ async function batchSendTx(
     bs58.encode(tx.transaction.serialize())
   );
 
-  if (transactions.length > 0) {
-    if (confirmed) {
-      const result = await sendBundle(transactions);
-      return { msg: "success", data: result };
-    } else {
-      const { result } = await jitoClient.sendBundle([transactions]);
-      console.log("Bundle ID:", result, `time: ${Date.now() / 1000}`);
-      return { msg: "success", data: result };
-    }
-  }
+  //   if (transactions.length > 0) {
+  //     if (confirmed) {
+  //       const result = await sendBundle(transactions);
+  //       return { msg: "success", data: result };
+  //     } else {
+  //       const { result } = await jitoClient.sendBundle([transactions]);
+  //       console.log("Bundle ID:", result, `time: ${Date.now() / 1000}`);
+  //       return { msg: "success", data: result };
+  //     }
+  //   }
   return { msg: "failed to send tx", data: null };
 }
 

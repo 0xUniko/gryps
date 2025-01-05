@@ -4,7 +4,6 @@ import { db } from "@/lib/instances";
 import { createSession, decrypt, updateSession } from "@/lib/session";
 import { Res } from "@/lib/types";
 import { PublicKey } from "@solana/web3.js";
-import assert from "assert";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
@@ -16,8 +15,12 @@ export async function verifySignature(
   message: string
 ): Promise<Res<boolean>> {
   const timestamp = message.split(" ").at(-1);
-  if (!timestamp || Date.now() - Number(timestamp) > 1000 * 60) {
-    return { msg: "timestamp is expired", data: null };
+  if (
+    !timestamp ||
+    Date.now() - Number(timestamp) > 1000 * 60 ||
+    Date.now() - Number(timestamp) <= 0
+  ) {
+    return { msg: "timestamp invalid", data: null };
   }
   // 验证签名
   const verified = nacl.sign.detached.verify(

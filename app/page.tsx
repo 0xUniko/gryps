@@ -1,5 +1,7 @@
 "use client";
+import { signOut } from "@/app/actions/auth";
 import { initPool } from "@/app/actions/init";
+import { batchSendTx } from "@/app/actions/swap";
 import {
   createWallets,
   getBalance,
@@ -10,13 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -24,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
 import { NATIVE_MINT } from "@solana/spl-token";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -31,7 +27,6 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { signOut } from "./actions/auth";
 
 export default function Home() {
   const [tokenMint, setTokenMint] = useState(
@@ -211,7 +206,14 @@ export default function Home() {
   const handleSubmit = async () => {
     try {
       // 这里处理多个表单的提交
-      console.log("提交交易:", formDataList);
+      // console.log("提交交易:", formDataList);
+      const result = await batchSendTx(
+        tokenMint,
+        formDataList.map((d) => ({
+          walletId: d.walletId,
+          param: { side: d.side, amountIn: BigInt(d.amount) },
+        }))
+      );
     } catch (error) {
       console.error("交易错误:", error);
       toast({
@@ -332,28 +334,34 @@ export default function Home() {
 
             <div>
               <label className="text-sm font-medium">交易类型</label>
-              <Select
+              <ToggleGroup
+                type="single"
                 value={formData.side}
-                onValueChange={(value: "buy" | "sell") =>
-                  setFormDataList(
-                    formDataList.map((item, i) =>
-                      i === index ? { ...item, side: value } : item
-                    )
-                  )
-                }
+                onValueChange={(value: "buy" | "sell") => {
+                  if (value) {
+                    // 确保有值时才更新
+                    setFormDataList(
+                      formDataList.map((item, i) =>
+                        i === index ? { ...item, side: value } : item
+                      )
+                    );
+                  }
+                }}
+                className="mt-1 justify-start"
               >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="选择交易类型" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="buy">买入</SelectItem>
-                  <SelectItem value="sell">卖出</SelectItem>
-                </SelectContent>
-              </Select>
+                <ToggleGroupItem value="buy" aria-label="买入">
+                  买入
+                </ToggleGroupItem>
+                <ToggleGroupItem value="sell" aria-label="卖出">
+                  卖出
+                </ToggleGroupItem>
+              </ToggleGroup>
             </div>
 
             <div>
-              <label className="text-sm font-medium">数量</label>
+              <label className="text-sm font-medium">
+                {formData.side === "buy" ? "wsol" : "代币"}数量
+              </label>
               <Input
                 type="number"
                 step="0.000001"
