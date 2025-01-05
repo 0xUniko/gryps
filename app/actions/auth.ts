@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { createSession, decrypt } from "@/lib/session";
+import { createSession, decrypt, updateSession } from "@/lib/session";
 import { Res } from "@/lib/types";
 import { PublicKey } from "@solana/web3.js";
 import { cookies } from "next/headers";
@@ -55,3 +55,14 @@ export async function verifyAuth() {
 
   return { msg: "success", data: payload };
 }
+
+export async function checkAndUpdateSession(): Promise<boolean> {
+  const { msg, data } = await verifyAuth();
+  if (msg === "success" && data) {
+    await updateSession();
+    return true;
+  }
+  return false;
+}
+
+

@@ -12,11 +12,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import assert from "assert";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { checkAndUpdateSession } from "./actions/auth";
 
 export default function Home() {
   const [poolId, setPoolId] = useState(
@@ -27,14 +27,15 @@ export default function Home() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [addingWallets, setAddingWallets] = useState(false);
-  const { isAuthenticated } = useAuth();
   const router = useRouter();
 
-  // useEffect(() => {
-  //   if (!isAuthenticated) {
-  //     router.push("/sign-in");
-  //   }
-  // }, [isAuthenticated, router]);
+  useEffect(() => {
+    checkAndUpdateSession().then((isAuthenticated) => {
+      if (!isAuthenticated) {
+        router.push("/sign-in");
+      }
+    });
+  }, [checkAndUpdateSession, router]);
 
   // 获取钱包列表
   const fetchWallets = async () => {
