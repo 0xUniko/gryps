@@ -9,9 +9,12 @@ import { AccountLayout } from "@solana/spl-token";
 import { Connection, PublicKey } from "@solana/web3.js";
 import assert from "assert";
 import BN from "bn.js";
+import { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
 import { getTip, jitoClient } from "../lib/jito";
+
+const db = Database.open("database.db");
 
 const connection = new Connection(process.env.HELIUS_RPC!);
 
@@ -306,6 +309,86 @@ app.get("/jito-tip-account", (c) => {
     return c.json({
       msg: "success",
       data: jitoTip.value.jitoTipAccount.toBase58(),
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
+type Wallet = {
+  id: number;
+  mnemonic: string;
+};
+
+class WalletCache {
+  private storage: Map<
+    string,
+    {
+      value: Wallet[];
+      expiry: number;
+    }
+  >;
+
+  constructor() {
+    this.storage = new Map();
+  }
+
+  getWallets(user: string) {
+    const cached = this.get(user);
+    if (cached !== null) {
+      return cached;
+    } else {
+      let query = `
+    SELECT id, mnemonic FROM wallet 
+    WHERE closed_at IS NULL
+    AND user = ?
+    AND closed_at IS NULL
+    ORDER BY created_at DESC
+  `;
+
+      const wallets = db.prepare(query).all(user) as Wallet[];
+
+      this.set(user, wallets);
+      return wallets;
+    }
+  }
+
+  set(user: string, value: Wallet[], ttl: number = 24 * 60 * 60) {
+    this.storage.set(user, {
+      value,
+      expiry: Date.now() + ttl * 1000,
+    });
+  }
+
+  get(key: string) {
+    const item = this.storage.get(key);
+    if (!item) return null;
+
+    if (Date.now() > item.expiry) {
+      this.storage.delete(key);
+      return null;
+    }
+
+    return item.value;
+  }
+
+  delete(key: string) {
+    this.storage.delete(key);
+  }
+}
+
+const walletCache = new WalletCache();
+
+app.get("/wallets", (c) => {
+  try {
+    const { user } = c.req.query();
+    const wallets = walletCache.getWallets(user);
+    return c.json({
+      msg: "success",
+      data: wallets,
     });
   } catch (error) {
     return c.json({

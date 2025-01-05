@@ -2,6 +2,7 @@
 
 import { connection, db } from "@/lib/instances";
 import { Res } from "@/lib/types";
+import { mnemonicToKeypair } from "@/lib/utils";
 import { getAssociatedTokenAddress } from "@solana/spl-token";
 import { Keypair, PublicKey, SolanaJSONRPCError } from "@solana/web3.js";
 import { generateMnemonic, mnemonicToSeedSync } from "bip39";
@@ -19,7 +20,7 @@ export async function getWallets(): Promise<Res<Wallet[]>> {
 
   try {
     let query = `
-      SELECT * FROM wallet 
+      SELECT id, address, created_at FROM wallet 
       WHERE closed_at IS NULL
       AND user = ?
       AND closed_at IS NULL
@@ -35,12 +36,6 @@ export async function getWallets(): Promise<Res<Wallet[]>> {
     };
   }
 }
-
-export const mnemonicToKeypair = (mnemonic: string) => {
-  const seed = mnemonicToSeedSync(mnemonic, "");
-  const path = `m/44'/501'/0'/0'`;
-  return Keypair.fromSeed(derivePath(path, seed.toString("hex")).key);
-};
 
 type Signer = {
   id: number;

@@ -1,5 +1,6 @@
 import { connection } from "@/lib/instances";
 import { getTip, jitoClient, sendBundle } from "@/lib/jito";
+import { mnemonicToKeypair } from "@/lib/utils";
 import {
   type AmmV4Keys,
   type ComputeBudgetConfig,
@@ -23,8 +24,7 @@ import assert from "assert";
 import BN from "bn.js";
 import bs58 from "bs58";
 import Decimal from "decimal.js";
-import { getTokenBalance, mnemonicToKeypair } from "./wallet";
-
+import { verifyAuth } from "./auth";
 
 const raydium = await Raydium.load({
   // @ts-ignore
@@ -74,7 +74,18 @@ async function getJitoTipAccount() {
   return await data.json();
 }
 
-// const baseIn = tokenMint.toBase58() === poolInfo.mintA.address;
+async function getWallets(user: string) {
+  const data = await fetch(`http://localhost:8333/wallets?user=${user}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${Buffer.from(process.env.HELIUS_RPC!).toString(
+        "base64"
+      )}`,
+    },
+  });
+  return await data.json();
+}
 
 async function buildSwapTx(
   owner: Owner,
@@ -150,16 +161,55 @@ async function buildSwapTx(
 }
 
 async function batchSendTx(
+  tokenMint: string,
   tradeParams: {
-    keypair: Keypair;
+    // keypair: Keypair;
+    walletId: number;
     param: { side: "sell" | "buy"; amountIn: bigint };
   }[],
   confirmed = false
 ) {
-  const jitoTipAccount = await getJitoTipAccount();
+  const pubkey = await verifyAuth();
+
+  const { msg: getJitoTipAccountMsg, data: jitoTipAccount } =
+    await getJitoTipAccount();
+  if (getJitoTipAccountMsg !== "success") {
+    return {
+      msg: `failed to get jito tip account: ${getJitoTipAccountMsg}`,
+      data: null,
+    };
+  }
+
   const {
-    data: { poolKeys },
+    msg: getPoolInfoMsg,
+    data: { poolKeys, poolInfo },
   } = await getPoolInfo();
+  if (getPoolInfoMsg !== "success") {
+    return {
+      msg: `failed to get pool info: ${getPoolInfoMsg}`,
+      data: null,
+    };
+  }
+  const baseIn = tokenMint === poolInfo.mintA.address;
+
+  const { msg: getWalletsMsg, data: wallets } = await getWallets(pubkey);
+  if (getWalletsMsg !== "success") {
+    return {
+      msg: `failed to get wallets: ${getWalletsMsg}`,
+      data: null,
+    };
+  }
+  if (
+    tradeParams.filter((t) =>
+      wallets.find((w: { id: number }) => w.id === t.walletId)
+    ).length !== tradeParams.length
+  ) {
+    return {
+      msg: "failed to get wallets",
+      data: null,
+    };
+  }
+
   console.log(`start getting jito tip account: ${Date.now() / 1000}`);
   const jitoTipAmount = await getTip();
   console.log(`jito tip amount: ${jitoTipAmount}`);
@@ -177,8 +227,10 @@ async function batchSendTx(
 
   const trades = tradeParams.reduce(
     (acc, t) => {
-      const mintIn = t.param.side === "buy" ? NATIVE_MINT : tokenMint;
-      const mintOut = t.param.side === "buy" ? tokenMint : NATIVE_MINT;
+      const mintIn =
+        t.param.side === "buy" ? NATIVE_MINT : new PublicKey(tokenMint);
+      const mintOut =
+        t.param.side === "buy" ? new PublicKey(tokenMint) : NATIVE_MINT;
 
       const amountIn = new BN(t.param.amountIn.toString());
 
@@ -216,7 +268,12 @@ async function batchSendTx(
             input === "base"
               ? quoteReserve.sub(out.amountOut)
               : quoteReserve.add(amountIn),
-          keypair: t.keypair,
+          //   walletId: t.walletId,
+          keypair: mnemonicToKeypair(
+            wallets.find(
+              (w: { id: number; mnemonic: string }) => w.id === t.walletId
+            )?.mnemonic!
+          ),
           amountIn,
           amountOut: out.minAmountOut,
           mintIn,
@@ -229,6 +286,7 @@ async function batchSendTx(
         baseReserve: new BN(response.base_reserve),
         quoteReserve: new BN(response.quote_reserve),
         keypair: new Keypair(),
+        // walletId: -1,
         amountIn: new BN(0),
         amountOut: new BN(0),
         mintIn: NATIVE_MINT,
@@ -264,14 +322,14 @@ async function batchSendTx(
   if (transactions.length > 0) {
     if (confirmed) {
       const result = await sendBundle(transactions);
-      return result;
+      return { msg: "success", data: result };
     } else {
       const { result } = await jitoClient.sendBundle([transactions]);
       console.log("Bundle ID:", result, `time: ${Date.now() / 1000}`);
-      return result;
+      return { msg: "success", data: result };
     }
   }
-  return null;
+  return { msg: "failed to send tx", data: null };
 }
 
 // await batchSendTx([
