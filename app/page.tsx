@@ -1,5 +1,4 @@
 "use client";
-import { signOut } from "@/app/actions/auth";
 import { initPool } from "@/app/actions/init";
 import {
   createWallets,
@@ -19,10 +18,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { NATIVE_MINT } from "@solana/spl-token";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export default function Home() {
   const [tokenMint, setTokenMint] = useState(
@@ -31,21 +30,14 @@ export default function Home() {
   const [wallets, setWallets] = useState<
     (Wallet & {
       solBalance: string;
+      wsolBalance: string;
       tokenBalance: string;
     })[]
   >([]);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [addingWallets, setAddingWallets] = useState(false);
-  const { connected, publicKey } = useWallet();
   const [walletAmount, setWalletAmount] = useState<number>(1);
-
-  useEffect(() => {
-    if (!connected || !publicKey) {
-      // 当钱包断开连接时，删除会话并重定向到登录页
-      signOut();
-    }
-  }, [connected, publicKey]);
 
   // 获取钱包列表
   const fetchWallets = async () => {
@@ -55,6 +47,7 @@ export default function Home() {
         result.data.map((wallet) => ({
           ...wallet,
           solBalance: "获取中...",
+          wsolBalance: "获取中...",
           tokenBalance: "获取中...",
         }))
       );
@@ -62,6 +55,10 @@ export default function Home() {
       const wallets = await Promise.all(
         result.data.map(async (wallet) => {
           const solBalance = await getBalance(wallet.address);
+          const wsolBalance = await getTokenBalance(
+            wallet.address,
+            NATIVE_MINT.toBase58()
+          );
           const tokenBalance = await getTokenBalance(wallet.address, tokenMint);
           return {
             ...wallet,
@@ -69,6 +66,10 @@ export default function Home() {
               solBalance.data === null
                 ? solBalance.msg
                 : (solBalance.data / LAMPORTS_PER_SOL).toString(),
+            wsolBalance:
+              wsolBalance.data === null
+                ? wsolBalance.msg
+                : (Number(wsolBalance.data) / LAMPORTS_PER_SOL).toString(),
             tokenBalance:
               tokenBalance.data === null
                 ? tokenBalance.msg
@@ -88,20 +89,20 @@ export default function Home() {
 
   const downloadCSV = (csvContent: string) => {
     // 创建Blob对象
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
     // 创建下载链接
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
-    
+
     // 设置下载属性
-    link.setAttribute('href', url);
-    link.setAttribute('download', `wallets_${Date.now()}.csv`);
-    
+    link.setAttribute("href", url);
+    link.setAttribute("download", `wallets_${Date.now()}.csv`);
+
     // 添加到文档并触发下载
     document.body.appendChild(link);
     link.click();
-    
+
     // 清理
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
@@ -201,6 +202,7 @@ export default function Home() {
                   <TableHead>ID</TableHead>
                   <TableHead>钱包地址</TableHead>
                   <TableHead>SOL余额</TableHead>
+                  <TableHead>WSOL余额</TableHead>
                   <TableHead>代币余额</TableHead>
                   <TableHead>创建时间</TableHead>
                 </TableRow>
@@ -212,8 +214,9 @@ export default function Home() {
                     <TableCell className="font-mono">
                       {wallet.address}
                     </TableCell>
-                    <TableCell>{wallet.solBalance ?? "0"} SOL</TableCell>
-                    <TableCell>{wallet.tokenBalance ?? "0"}</TableCell>
+                    <TableCell>{wallet.solBalance} SOL</TableCell>
+                    <TableCell>{wallet.wsolBalance} WSOL</TableCell>
+                    <TableCell>{wallet.tokenBalance}</TableCell>
                     <TableCell>
                       {new Date(wallet.created_at).toLocaleString()}
                     </TableCell>

@@ -16,7 +16,9 @@ export async function verifySignature(
   message: string
 ): Promise<Res<boolean>> {
   const timestamp = message.split(" ").at(-1);
-  assert(Date.now() - Number(timestamp) < 1000 * 60, "timestamp is expired");
+  if (!timestamp || Date.now() - Number(timestamp) > 1000 * 60) {
+    return { msg: "timestamp is expired", data: null };
+  }
   // 验证签名
   const verified = nacl.sign.detached.verify(
     new TextEncoder().encode(message),
@@ -44,7 +46,6 @@ export async function verifySignature(
 export const verifyAuth = cache(async () => {
   const cookie = (await cookies()).get("session")?.value;
   const session = await decrypt(cookie);
-
 
   if (!session?.publicKey) {
     redirect("/sign-in");
