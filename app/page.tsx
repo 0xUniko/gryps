@@ -19,9 +19,11 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { NATIVE_MINT } from "@solana/spl-token";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { signOut } from "./actions/auth";
 
 export default function Home() {
   const [tokenMint, setTokenMint] = useState(
@@ -38,6 +40,14 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [addingWallets, setAddingWallets] = useState(false);
   const [walletAmount, setWalletAmount] = useState<number>(1);
+
+  const { disconnecting } =
+    useWallet();
+  useEffect(() => {
+    if (disconnecting) {
+      signOut()
+    }
+  }, [disconnecting]);
 
   // 获取钱包列表
   const fetchWallets = async () => {
@@ -174,7 +184,7 @@ export default function Home() {
       </div>
 
       <div className="mb-8 space-y-4">
-        <h2 className="text-2xl font-bold">初始化Raydium池子监听</h2>
+        <h2 className="text-2xl font-bold">开始Raydium池子监听</h2>
         <div className="flex gap-4 max-w-md">
           <Input
             placeholder="输入代币地址"
@@ -182,7 +192,7 @@ export default function Home() {
             onChange={(e) => setTokenMint(e.target.value)}
           />
           <Button onClick={handleInitClick} disabled={loading || !tokenMint}>
-            {loading ? "初始化中..." : "初始化"}
+            {loading ? "开始..." : "开始监听"}
           </Button>
         </div>
       </div>
