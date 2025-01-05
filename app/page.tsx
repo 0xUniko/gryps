@@ -1,4 +1,6 @@
 "use client";
+import { initPool } from "@/app/actions/init";
+import { createWallets, getWallets, type Wallet } from "@/app/actions/wallets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,48 +13,35 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import assert from "assert";
-import { useState } from "react";
-
-async function init(poolId: string) {
-  const response = await fetch("/api/init", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ poolId }),
-  });
-
-  if (!response.ok) {
-    throw new Error("初始化失败");
-  }
-
-  return response.json();
-}
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Home() {
   const [poolId, setPoolId] = useState(
     "4ZRWV4zp9C5BxSgUVMAj4fqpJ2h1azL4yBWASjisoEbL"
   );
-  const [wallets, setWallets] = useState<
-    Array<{ id: number; address: string; created_at: string }>
-  >([]);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
   const [newWallets, setNewWallets] = useState("");
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [addingWallets, setAddingWallets] = useState(false);
-  const { isAuthenticated, authenticate } = useAuth();
-  const { connected } = useWallet();
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  // useEffect(() => {
+  //   if (!isAuthenticated) {
+  //     router.push("/sign-in");
+  //   }
+  // }, [isAuthenticated, router]);
 
   // 获取钱包列表
   const fetchWallets = async () => {
     try {
-      const response = await fetch("/api/wallets");
-      const data = await response.json();
-      if (data.wallets) {
-        setWallets(data.wallets);
+      const result = await getWallets(user);
+      if (result.data) {
+        setWallets(result.data);
       }
     } catch (error) {
       console.error("获取钱包列表失败:", error);
@@ -65,25 +54,21 @@ export default function Home() {
 
     setAddingWallets(true);
     try {
-      const addresses = newWallets
+      const amount = newWallets
         .split("\n")
-        .filter((address) => address.trim());
-      const response = await fetch("/api/wallets", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ addresses }),
-      });
+        .filter((address) => address.trim()).length;
+      const result = await createWallets(amount);
 
-      if (!response.ok) throw new Error("添加失败");
-
-      toast({
-        title: "成功",
-        description: "钱包添加成功",
-      });
-      setNewWallets("");
-      fetchWallets(); // 刷新列表
+      if (result.msg === "success") {
+        toast({
+          title: "成功",
+          description: "钱包添加成功",
+        });
+        setNewWallets("");
+        fetchWallets(); // 刷新列表
+      } else {
+        throw new Error(result.msg);
+      }
     } catch (error) {
       toast({
         variant: "destructive",
@@ -100,12 +85,15 @@ export default function Home() {
 
     setLoading(true);
     try {
-      const res = await init(poolId);
-      assert(res.msg === "success", res.msg);
-      toast({
-        title: "成功",
-        description: "初始化成功",
-      });
+      const result = await initPool(poolId);
+      if (result.msg === "success") {
+        toast({
+          title: "成功",
+          description: "初始化成功",
+        });
+      } else {
+        throw new Error(result.msg);
+      }
     } catch (error) {
       console.error("Error:", error);
       toast({
@@ -117,28 +105,6 @@ export default function Home() {
       setLoading(false);
     }
   };
-
-  // 添加处理连接钱包的函数
-  const handleWalletConnect = async () => {
-    const token = await authenticate();
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="container mx-auto p-4 flex flex-col items-center justify-center min-h-screen space-y-4">
-        <h1 className="text-2xl font-bold">请连接并验证您的钱包</h1>
-        {connected && !isAuthenticated && (
-          <Button
-            onClick={handleWalletConnect}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            点击进行签名验证
-          </Button>
-        )}
-        <WalletMultiButton />
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto p-4 space-y-8">
