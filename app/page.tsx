@@ -6,7 +6,7 @@ import {
   getTokenBalance,
   getWallets,
   type Wallet,
-} from "@/app/actions/wallets";
+} from "@/app/actions/wallet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {

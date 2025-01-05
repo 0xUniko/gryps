@@ -36,7 +36,7 @@ export async function getWallets(): Promise<Res<Wallet[]>> {
   }
 }
 
-const mnemonicToKeypair = (mnemonic: string) => {
+export const mnemonicToKeypair = (mnemonic: string) => {
   const seed = mnemonicToSeedSync(mnemonic, "");
   const path = `m/44'/501'/0'/0'`;
   return Keypair.fromSeed(derivePath(path, seed.toString("hex")).key);

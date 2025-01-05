@@ -1,11 +1,17 @@
-import { Raydium, liquidityStateV4Layout } from "@raydium-io/raydium-sdk-v2";
+import {
+  AmmV4Keys,
+  AmmV5Keys,
+  ApiV3PoolInfoStandardItem,
+  Raydium,
+  liquidityStateV4Layout,
+} from "@raydium-io/raydium-sdk-v2";
 import { AccountLayout } from "@solana/spl-token";
 import { Connection, PublicKey } from "@solana/web3.js";
 import assert from "assert";
 import BN from "bn.js";
 import { Hono } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
-import { getTip } from "./jito";
+import { getTip, jitoClient } from "../lib/jito";
 
 const connection = new Connection(process.env.HELIUS_RPC!);
 
@@ -21,6 +27,8 @@ class PoolReserve {
   baseReserve?: BN;
   quoteReserve?: BN;
   lpInfo?: ReturnType<typeof liquidityStateV4Layout.decode>;
+  poolInfo?: ApiV3PoolInfoStandardItem;
+  poolKeys?: AmmV4Keys | AmmV5Keys;
   baseVaultListener?: number;
   quoteVaultListener?: number;
   lpInfoListener?: number;
@@ -43,12 +51,15 @@ class PoolReserve {
   async init(poolId: string) {
     await this.cleanup();
 
-    const { poolRpcData } = await raydium.liquidity.getPoolInfoFromRpc({
-      poolId,
-    });
+    const { poolRpcData, poolInfo, poolKeys } =
+      await raydium.liquidity.getPoolInfoFromRpc({
+        poolId,
+      });
     this.baseReserve = poolRpcData.baseReserve;
     this.quoteReserve = poolRpcData.quoteReserve;
     this.lpInfo = poolRpcData;
+    this.poolInfo = poolInfo;
+    this.poolKeys = poolKeys;
 
     this.baseVaultListener = connection.onAccountChange(
       poolRpcData.baseVault,
@@ -126,6 +137,8 @@ class PoolReserve {
       base_reserve: this.baseReserve.toString(),
       quote_reserve: this.quoteReserve.toString(),
       status: this.lpInfo.status.toString(),
+      poolInfo: this.poolInfo,
+      poolKeys: this.poolKeys,
     };
   }
   updateBaseReserve(baseVaultAccountInfoData: Buffer) {
@@ -152,14 +165,20 @@ class PoolReserve {
   }
 }
 
-class JitoTip {
+class Jito {
   jitoTip?: number;
   private updateInterval?: Timer;
+  jitoTipAccount?: PublicKey;
+  updateJitoTipInterval?: Timer;
 
   async cleanup() {
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = undefined;
+    }
+    if (this.updateJitoTipInterval) {
+      clearInterval(this.updateJitoTipInterval);
+      this.updateJitoTipInterval = undefined;
     }
   }
 
@@ -178,16 +197,25 @@ class JitoTip {
     this.updateInterval = setInterval(async () => {
       this.jitoTip = await getTip(tick);
     }, 600000);
+    this.updateJitoTipInterval = setInterval(async () => {
+      this.jitoTipAccount = new PublicKey(
+        await jitoClient.getRandomTipAccount()
+      );
+    }, 60000);
   }
 
   get value() {
     assert(this.jitoTip !== undefined, "server is not initialised");
-    return this.jitoTip;
+    assert(this.jitoTipAccount !== undefined, "server is not initialised");
+    return {
+      jitoTip: this.jitoTip,
+      jitoTipAccount: this.jitoTipAccount,
+    };
   }
 }
 
 const poolReserve = new PoolReserve();
-const jitoTip = new JitoTip();
+const jitoTip = new Jito();
 await jitoTip.init();
 
 const app = new Hono();
@@ -244,11 +272,40 @@ app.get("/reserve", (c) => {
   }
 });
 
+app.get("/pool-info", async (c) => {
+  try {
+    const { poolInfo, poolKeys } = poolReserve.value;
+    return c.json({
+      msg: "success",
+      data: { poolInfo, poolKeys },
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
 app.get("/jito-tip", (c) => {
   try {
     return c.json({
       msg: "success",
-      data: jitoTip.value,
+      data: jitoTip.value.jitoTip,
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
+app.get("/jito-tip-account", (c) => {
+  try {
+    return c.json({
+      msg: "success",
+      data: jitoTip.value.jitoTipAccount.toBase58(),
     });
   } catch (error) {
     return c.json({

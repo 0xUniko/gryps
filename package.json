@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"bun --watch lib/dataServer.ts\" \"next dev --turbopack\"",
-    "dev:https": "concurrently \"bun https-proxy.js\" \"bun --watch lib/dataServer.ts\" \"next dev --turbopack\"",
+    "dev": "concurrently \"bun --watch backend/dataServer.ts\" \"next dev --turbopack\"",
+    "dev:https": "concurrently \"bun https-proxy.js\" \"bun --watch backend/dataServer.ts\" \"next dev --turbopack\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
