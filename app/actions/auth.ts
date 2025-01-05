@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { createSession, decrypt, updateSession } from "@/lib/session";
 import { Res } from "@/lib/types";
 import { PublicKey } from "@solana/web3.js";
+import assert from "assert";
 import { cookies } from "next/headers";
 import nacl from "tweetnacl";
 
@@ -12,9 +13,11 @@ export async function verifySignature(
   signature: string,
   message: string
 ): Promise<Res<boolean>> {
+  const timestamp = message.split(" ").at(-1);
+  assert(Date.now() - Number(timestamp) < 1000 * 60, "timestamp is expired");
   // 验证签名
   const verified = nacl.sign.detached.verify(
-    Buffer.from(message, "hex"),
+    new TextEncoder().encode(message),
     Buffer.from(signature, "hex"),
     new PublicKey(publicKey).toBytes()
   );
@@ -65,4 +68,8 @@ export async function checkAndUpdateSession(): Promise<boolean> {
   return false;
 }
 
-
+// sign out
+export async function signOut() {
+  const cookieStore = await cookies();
+  cookieStore.delete("session");
+}

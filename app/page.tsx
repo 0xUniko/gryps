@@ -1,4 +1,5 @@
 "use client";
+import { signOut } from "@/app/actions/auth";
 import { initPool } from "@/app/actions/init";
 import { createWallets, getWallets, type Wallet } from "@/app/actions/wallets";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import assert from "assert";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { checkAndUpdateSession } from "./actions/auth";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 export default function Home() {
   const [poolId, setPoolId] = useState(
@@ -28,6 +30,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [addingWallets, setAddingWallets] = useState(false);
   const router = useRouter();
+  const { connected, publicKey } = useWallet();
 
   useEffect(() => {
     checkAndUpdateSession().then((isAuthenticated) => {
@@ -36,6 +39,14 @@ export default function Home() {
       }
     });
   }, [checkAndUpdateSession, router]);
+
+  useEffect(() => {
+    if (!connected || !publicKey) {
+      // 当钱包断开连接时，删除会话并重定向到登录页
+      signOut();
+      router.push("/sign-in");
+    }
+  }, [connected, publicKey, router]);
 
   // 获取钱包列表
   const fetchWallets = async () => {

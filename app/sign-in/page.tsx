@@ -55,12 +55,13 @@ export default function SignIn() {
     } catch (error) {
       errmsg = error instanceof Error ? error.message : "Authentication failed";
     }
-
-    toast({
-      variant: "destructive",
-      title: "Authentication failed",
-      description: errmsg,
-    });
+    if (errmsg) {
+      toast({
+        variant: "destructive",
+        title: "Authentication failed",
+        description: errmsg,
+      });
+    }
   };
 
   return (
