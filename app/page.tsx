@@ -22,9 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { checkAndUpdateSession } from "./actions/auth";
 
 export default function Home() {
   const [tokenMint, setTokenMint] = useState(
@@ -36,12 +34,11 @@ export default function Home() {
       tokenBalance: string;
     })[]
   >([]);
-  const [newWallets, setNewWallets] = useState("");
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [addingWallets, setAddingWallets] = useState(false);
-  const router = useRouter();
   const { connected, publicKey } = useWallet();
+  const [walletAmount, setWalletAmount] = useState<number>(1);
 
   useEffect(() => {
     if (!connected || !publicKey) {
@@ -52,7 +49,7 @@ export default function Home() {
 
   // 获取钱包列表
   const fetchWallets = async () => {
-    const result = await getWallets(publicKey?.toBase58()!);
+    const result = await getWallets();
     if (result.data) {
       setWallets(
         result.data.map((wallet) => ({
@@ -89,24 +86,46 @@ export default function Home() {
     }
   };
 
+  const downloadCSV = (csvContent: string) => {
+    // 创建Blob对象
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    // 创建下载链接
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // 设置下载属性
+    link.setAttribute('href', url);
+    link.setAttribute('download', `wallets_${Date.now()}.csv`);
+    
+    // 添加到文档并触发下载
+    document.body.appendChild(link);
+    link.click();
+    
+    // 清理
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // 批量添加钱包
   const handleAddWallets = async () => {
-    if (!newWallets.trim()) return;
+    if (walletAmount <= 0 || walletAmount > 500) {
+      toast({
+        variant: "destructive",
+        title: "错误",
+        description: "请输入1-500之间的数量",
+      });
+      return;
+    }
 
     setAddingWallets(true);
     try {
-      const amount = newWallets
-        .split("\n")
-        .filter((address) => address.trim()).length;
-      const result = await createWallets(amount);
+      const result = await createWallets(walletAmount);
 
-      if (result.msg === "success") {
-        toast({
-          title: "成功",
-          description: "钱包添加成功",
-        });
-        setNewWallets("");
-        fetchWallets(); // 刷新列表
+      if (result.data) {
+        downloadCSV(result.data);
+        setWalletAmount(1);
+        // fetchWallets(); // 刷新列表
       } else {
         throw new Error(result.msg);
       }
@@ -173,11 +192,8 @@ export default function Home() {
           <Button onClick={fetchWallets} disabled={loading}>
             获取钱包列表和余额
           </Button>
-          <Button onClick={handleAddWallets} disabled={addingWallets}>
-            批量添加钱包
-          </Button>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <div className="border rounded-lg">
             <Table>
               <TableHeader>
@@ -205,6 +221,20 @@ export default function Home() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+          <div className="flex gap-4 items-center">
+            <Input
+              type="number"
+              min={1}
+              max={500}
+              value={walletAmount}
+              onChange={(e) => setWalletAmount(Number(e.target.value))}
+              placeholder="输入创建钱包数量（最大500个）"
+              className="max-w-[100px]"
+            />
+            <Button onClick={handleAddWallets} disabled={addingWallets}>
+              {addingWallets ? "创建中..." : "批量添加钱包"}
+            </Button>
           </div>
         </div>
       </div>

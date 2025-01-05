@@ -2,12 +2,7 @@ import { Database } from "bun:sqlite";
 
 const db = new Database("database.db");
 
-// 只使用 PRIMARY KEY 就足够了，因为它已经隐含了 UNIQUE 约束
-db.run(`
-  CREATE TABLE IF NOT EXISTS user (
-    address TEXT PRIMARY KEY
-  )
-`);
+
 
 // 插入新用户
 try {

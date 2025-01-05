@@ -2,28 +2,8 @@
 
 import { connection, db } from "@/lib/instances";
 import { Res } from "@/lib/types";
-import {
-  NATIVE_MINT,
-  TOKEN_2022_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-  closeAccount,
-  createTransferInstruction,
-  getAccount,
-  getAssociatedTokenAddress,
-  getMint,
-  getOrCreateAssociatedTokenAccount,
-  syncNative,
-} from "@solana/spl-token";
-import {
-  Connection,
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  SolanaJSONRPCError,
-  SystemProgram,
-  TransactionMessage,
-  VersionedTransaction,
-} from "@solana/web3.js";
+import { getAssociatedTokenAddress } from "@solana/spl-token";
+import { Keypair, PublicKey, SolanaJSONRPCError } from "@solana/web3.js";
 import { generateMnemonic, mnemonicToSeedSync } from "bip39";
 import { derivePath } from "ed25519-hd-key";
 import { verifyAuth } from "./auth";
@@ -34,7 +14,7 @@ export type Wallet = {
   created_at: string;
 };
 
-export async function getWallets(user: string): Promise<Res<Wallet[]>> {
+export async function getWallets(): Promise<Res<Wallet[]>> {
   const pubkey = await verifyAuth();
 
   try {
@@ -46,7 +26,7 @@ export async function getWallets(user: string): Promise<Res<Wallet[]>> {
       ORDER BY created_at DESC
     `;
 
-    const wallets = db.prepare(query).all(user) as Wallet[];
+    const wallets = db.prepare(query).all(pubkey) as Wallet[];
     return { msg: "success", data: wallets };
   } catch (error) {
     return {
@@ -62,42 +42,66 @@ const mnemonicToKeypair = (mnemonic: string) => {
   return Keypair.fromSeed(derivePath(path, seed.toString("hex")).key);
 };
 
-export async function createWallets(amount: number): Promise<
-  Res<
-    Array<{
-      name: number;
-      mnemonic: string;
-      address: string;
-    }>
-  >
-> {
+type Signer = {
+  id: number;
+  address: string;
+  mnemonic: string;
+};
+
+export async function createWallets(amount: number): Promise<Res<string>> {
+  const pubkey = await verifyAuth();
   try {
     const wallets = [];
     for (let i = 0; i < amount; i++) {
       const mnemonic = generateMnemonic();
       const keypair = mnemonicToKeypair(mnemonic);
       wallets.push({
-        name: i,
         mnemonic,
         address: keypair.publicKey.toString(),
       });
     }
 
-    // 批量插入钱包地址
-    for (const wallet of wallets) {
-      db.prepare("INSERT INTO wallets (address, mnemonic) VALUES (?, ?)").run(
-        wallet.address,
-        wallet.mnemonic
-      );
-    }
+    // 使用单条SQL批量插入并返回插入的数据
+    const placeholders = wallets.map(() => "(?, ?, ?)").join(", ");
+    const values = wallets.flatMap((wallet) => [
+      wallet.address,
+      wallet.mnemonic,
+      pubkey,
+    ]);
+    const insertedWallets = db
+      .prepare(
+        `
+      INSERT INTO wallet (address, mnemonic, user) 
+      VALUES ${placeholders}
+      RETURNING id, address, mnemonic
+    `
+      )
+      .all(...values) as Signer[];
 
-    return { msg: "success", data: wallets };
+    // 生成CSV内容
+    const csvContent = generateCSVContent(insertedWallets as Signer[]);
+    return { msg: "success", data: csvContent };
   } catch (error) {
     return {
       msg: error instanceof Error ? error.message : "create wallets failed",
       data: null,
     };
   }
+}
+
+function generateCSVContent(wallets: Signer[]): string {
+  // CSV 标题行
+  const headers = ["Id", "Address", "Mnemonic"];
+
+  // 转换数据为CSV格式
+  const rows = wallets.map((wallet) => [
+    wallet.id,
+    wallet.address,
+    wallet.mnemonic,
+  ]);
+
+  // 组合标题和数据行
+  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
 }
 
 export async function getTokenBalance(
