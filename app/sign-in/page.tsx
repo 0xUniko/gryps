@@ -1,38 +1,24 @@
 "use client";
-import {
-  checkAndUpdateSession,
-  verifySignature,
-} from "@/app/actions/auth";
+import { verifySignature } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import assert from "assert";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export default function SignIn() {
   const { signMessage, publicKey, connected } = useWallet();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-
-  useEffect(() => {
-    const checkSession = async () => {
-      const isAuth = await checkAndUpdateSession();
-      setIsAuthenticated(isAuth);
-      if (isAuth) {
-        router.push("/");
-      }
-    };
-
-    checkSession();
-  }, [router]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleWalletConnect = async () => {
     assert(signMessage !== undefined, "signMessage is undefined");
     assert(publicKey !== null, "publicKey is null");
 
+    setIsLoading(true);
     const timestamp = Date.now();
     const message = `login ${timestamp}`;
 
@@ -46,13 +32,15 @@ export default function SignIn() {
         message
       );
 
+      setIsLoading(false);
+
       if (data) {
-        setIsAuthenticated(true);
         router.push("/");
       } else {
         errmsg = msg;
       }
     } catch (error) {
+      setIsLoading(false);
       errmsg = error instanceof Error ? error.message : "Authentication failed";
     }
     if (errmsg) {
@@ -71,8 +59,9 @@ export default function SignIn() {
         <Button
           onClick={handleWalletConnect}
           className="bg-blue-600 hover:bg-blue-700"
+          disabled={isLoading}
         >
-          点击进行签名验证
+          {isLoading ? "验证中..." : "点击进行签名验证"}
         </Button>
       )}
       <WalletMultiButton />

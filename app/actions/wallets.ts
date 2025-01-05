@@ -1,10 +1,32 @@
 "use server";
 
-import { db } from "@/lib/db";
+import { connection, db } from "@/lib/instances";
 import { Res } from "@/lib/types";
-import { Keypair } from "@solana/web3.js";
+import {
+  NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  closeAccount,
+  createTransferInstruction,
+  getAccount,
+  getAssociatedTokenAddress,
+  getMint,
+  getOrCreateAssociatedTokenAccount,
+  syncNative,
+} from "@solana/spl-token";
+import {
+  Connection,
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  SolanaJSONRPCError,
+  SystemProgram,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import { generateMnemonic, mnemonicToSeedSync } from "bip39";
 import { derivePath } from "ed25519-hd-key";
+import { verifyAuth } from "./auth";
 
 export type Wallet = {
   id: number;
@@ -13,6 +35,8 @@ export type Wallet = {
 };
 
 export async function getWallets(user: string): Promise<Res<Wallet[]>> {
+  const pubkey = await verifyAuth();
+
   try {
     let query = `
       SELECT * FROM wallet 
@@ -71,6 +95,45 @@ export async function createWallets(amount: number): Promise<
   } catch (error) {
     return {
       msg: error instanceof Error ? error.message : "create wallets failed",
+      data: null,
+    };
+  }
+}
+
+export async function getTokenBalance(
+  wallet: string,
+  mint: string
+): Promise<Res<bigint>> {
+  const walletAddress = new PublicKey(wallet);
+  const mintAddress = new PublicKey(mint);
+  try {
+    const metadataAddress = await getAssociatedTokenAddress(
+      mintAddress,
+      walletAddress
+    );
+    const tokenAmount = await connection.getTokenAccountBalance(
+      metadataAddress
+    );
+    return { msg: "success", data: BigInt(tokenAmount.value.amount) };
+  } catch (e) {
+    if (e instanceof SolanaJSONRPCError) {
+      return { msg: "success", data: 0n };
+    } else {
+      return {
+        msg: e instanceof Error ? e.message : "get token balance failed",
+        data: null,
+      };
+    }
+  }
+}
+
+export async function getBalance(publicKey: string) {
+  try {
+    const balance = await connection.getBalance(new PublicKey(publicKey));
+    return { msg: "success", data: balance };
+  } catch (e) {
+    return {
+      msg: e instanceof Error ? e.message : "get balance failed",
       data: null,
     };
   }

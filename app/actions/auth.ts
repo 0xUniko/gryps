@@ -1,11 +1,13 @@
 "use server";
 
-import { db } from "@/lib/db";
+import { db } from "@/lib/instances";
 import { createSession, decrypt, updateSession } from "@/lib/session";
 import { Res } from "@/lib/types";
 import { PublicKey } from "@solana/web3.js";
 import assert from "assert";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { cache } from "react";
 import nacl from "tweetnacl";
 
 export async function verifySignature(
@@ -39,37 +41,39 @@ export async function verifySignature(
   return { msg: "success", data: true };
 }
 
-export async function verifyAuth() {
-  const session = (await cookies()).get("session")?.value;
-  const payload = await decrypt(session);
+export const verifyAuth = cache(async () => {
+  const cookie = (await cookies()).get("session")?.value;
+  const session = await decrypt(cookie);
 
-  if (!session || !payload) {
-    return { msg: "unauthorized", data: null };
+
+  if (!session?.publicKey) {
+    redirect("/sign-in");
+  } else {
+    //   // 检查用户是否仍在白名单中
+    const user = db
+      .query("SELECT * FROM user WHERE address = $1")
+      .all(session.publicKey as string);
+
+    if (!user.length) {
+      redirect("/sign-in");
+    }
+
+    return session.publicKey as string;
   }
+});
 
-  // 检查用户是否仍在白名单中
-  const user = db
-    .query("SELECT * FROM user WHERE address = $1")
-    .all(payload.publicKey);
-
-  if (!user.length) {
-    return { msg: "user not found in whitelist", data: null };
-  }
-
-  return { msg: "success", data: payload };
-}
-
-export async function checkAndUpdateSession(): Promise<boolean> {
-  const { msg, data } = await verifyAuth();
-  if (msg === "success" && data) {
+export async function checkAndUpdateSession(): Promise<string> {
+  const publicKey = await verifyAuth();
+  if (publicKey) {
     await updateSession();
-    return true;
+    return publicKey;
   }
-  return false;
+  return "";
 }
 
 // sign out
 export async function signOut() {
   const cookieStore = await cookies();
   cookieStore.delete("session");
+  redirect("/sign-in");
 }

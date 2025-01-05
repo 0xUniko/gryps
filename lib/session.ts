@@ -68,14 +68,3 @@ export async function deleteSession() {
   const cookieStore = await cookies();
   cookieStore.delete("session");
 }
-
-export const verifySession = cache(async () => {
-  const cookie = (await cookies()).get("session")?.value;
-  const session = await decrypt(cookie);
-
-  if (!session?.publicKey) {
-    redirect("/signIn");
-  } else {
-    return { isAuth: true, userId: session.userId };
-  }
-});
