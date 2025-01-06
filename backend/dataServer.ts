@@ -218,8 +218,8 @@ class Jito {
 }
 
 const poolReserve = new PoolReserve();
-const jitoTip = new Jito();
-await jitoTip.init();
+const jito = new Jito();
+await jito.init();
 
 const app = new Hono();
 app.use(
@@ -248,7 +248,7 @@ app.post("/jito/init", async (c) => {
   try {
     const { jito_tip_tick } = await c.req.json();
     console.log("initing jito tip...");
-    await jitoTip.init(jito_tip_tick);
+    await jito.init(jito_tip_tick);
     return c.json({
       msg: "success",
       data: null,
@@ -294,7 +294,7 @@ app.get("/jito-tip", (c) => {
   try {
     return c.json({
       msg: "success",
-      data: jitoTip.value.jitoTip,
+      data: jito.value.jitoTip,
     });
   } catch (error) {
     return c.json({
@@ -308,7 +308,7 @@ app.get("/jito-tip-account", (c) => {
   try {
     return c.json({
       msg: "success",
-      data: jitoTip.value.jitoTipAccount.toBase58(),
+      data: jito.value.jitoTipAccount.toBase58(),
     });
   } catch (error) {
     return c.json({
@@ -333,7 +333,22 @@ class WalletCache {
   }
 
   getWallets(user: string) {
-    const cached = this.get(user);
+    let query = `
+    SELECT id, address, mnemonic, created_at FROM wallet 
+    WHERE closed_at IS NULL
+    AND user = ?
+    AND closed_at IS NULL
+    ORDER BY created_at DESC
+  `;
+
+    const wallets = db.prepare(query).all(user) as Wallet[];
+
+    this.storage.set(user, wallets);
+    return wallets;
+  }
+
+  get(user: string) {
+    const cached = this.storage.get(user);
     if (cached !== null) {
       return cached;
     } else {
@@ -350,10 +365,6 @@ class WalletCache {
       this.storage.set(user, wallets);
       return wallets;
     }
-  }
-
-  get(key: string) {
-    return this.storage.get(key);
   }
 
   delete(key: string) {

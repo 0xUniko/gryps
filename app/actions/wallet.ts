@@ -19,27 +19,31 @@ export async function getWallets(): Promise<Res<Wallet[]>> {
   const pubkey = await verifyAuth();
 
   try {
-    const data = await fetch(
-      `http://localhost:8333/wallets?user=${pubkey}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${Buffer.from(
-            process.env.HELIUS_RPC!
-          ).toString("base64")}`,
-        },
-      }
-    );
-    const wallets = await data.json();
-    return {
-      msg: "success",
-      data: wallets.map(({ id, address, created_at }: Wallet) => ({
-        id,
-        address,
-        created_at,
-      })),
-    };
+    const data = await fetch(`http://localhost:8333/wallets?user=${pubkey}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Buffer.from(process.env.HELIUS_RPC!).toString(
+          "base64"
+        )}`,
+      },
+    });
+    const { msg, data: wallets } = await data.json();
+    if (msg === "success") {
+      return {
+        msg: "success",
+        data: wallets.map(({ id, address, created_at }: Wallet) => ({
+          id,
+          address,
+          created_at,
+        })),
+      };
+    } else {
+      return {
+        msg,
+        data: null,
+      };
+    }
   } catch (error) {
     return {
       msg: error instanceof Error ? error.message : "get wallets failed",

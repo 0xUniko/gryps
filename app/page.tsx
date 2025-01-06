@@ -207,13 +207,21 @@ export default function Home() {
     try {
       // 这里处理多个表单的提交
       // console.log("提交交易:", formDataList);
-      const result = await batchSendTx(
+      const { msg, data } = await batchSendTx(
         tokenMint,
         formDataList.map((d) => ({
           walletId: d.walletId,
           param: { side: d.side, amountIn: BigInt(d.amount) },
         }))
       );
+      if (msg === "success") {
+        toast({
+          title: "success",
+          description: data,
+        });
+      } else {
+        throw new Error(msg);
+      }
     } catch (error) {
       console.error("交易错误:", error);
       toast({

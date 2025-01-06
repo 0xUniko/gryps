@@ -1,4 +1,4 @@
-import { connection } from "@/lib/instances";
+"use server";
 import { getTip, jitoClient, sendBundle } from "@/lib/jito";
 import { mnemonicToKeypair } from "@/lib/utils";
 import {
@@ -14,20 +14,23 @@ import {
 } from "@raydium-io/raydium-sdk-v2";
 import { NATIVE_MINT, getAssociatedTokenAddress } from "@solana/spl-token";
 import {
+  Connection,
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
   VersionedTransaction,
 } from "@solana/web3.js";
+// import { Connection } from "@solana/web3.js-radium";
 import assert from "assert";
 import BN from "bn.js";
 import bs58 from "bs58";
 import Decimal from "decimal.js";
 import { verifyAuth } from "./auth";
 
+const connection = new Connection(process.env.HELIUS_RPC!);
+
 const raydium = await Raydium.load({
-  // @ts-ignore
   connection,
   cluster: "mainnet",
   disableFeatureCheck: true,
@@ -182,7 +185,7 @@ export async function batchSendTx(
 
   const {
     msg: getPoolInfoMsg,
-    data: { poolKeys, poolInfo },
+    data: poolInfoData,
   } = await getPoolInfo();
   if (getPoolInfoMsg !== "success") {
     return {
@@ -190,6 +193,8 @@ export async function batchSendTx(
       data: null,
     };
   }
+  console.log({ poolInfoData });
+  const { poolInfo, poolKeys } = poolInfoData;
   console.dir(poolInfo);
   const baseIn = tokenMint === poolInfo.mintA.address;
 
