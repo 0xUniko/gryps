@@ -1,7 +1,6 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function middleware(request: typeof NextRequest) {
   // 排除不需要验证的路径
   if (request.nextUrl.pathname === "/sign-in") {
     return NextResponse.next();

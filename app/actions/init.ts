@@ -21,8 +21,7 @@ export async function initPool(tokenMint: string): Promise<Res<any>> {
       body: JSON.stringify({ pool_id: poolId }),
     });
 
-    const responseData = await data.json();
-    return { msg: "success", data: responseData };
+    return await data.json();
   } catch (error) {
     return {
       msg: error instanceof Error ? error.message : "init pool failed",

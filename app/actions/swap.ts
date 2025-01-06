@@ -1,5 +1,5 @@
 "use server";
-import { getTip, jitoClient, sendBundle } from "@/lib/jito";
+import { jitoClient, sendBundle } from "@/lib/jito";
 import { mnemonicToKeypair } from "@/lib/utils";
 import {
   type AmmV4Keys,
@@ -21,8 +21,6 @@ import {
   SystemProgram,
   VersionedTransaction,
 } from "@solana/web3.js";
-// import { Connection } from "@solana/web3.js-radium";
-import assert from "assert";
 import BN from "bn.js";
 import bs58 from "bs58";
 import Decimal from "decimal.js";
@@ -53,6 +51,19 @@ async function getPoolInfo() {
 
 async function getReserve() {
   const data = await fetch("http://localhost:8333/reserve", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${Buffer.from(process.env.HELIUS_RPC!).toString(
+        "base64"
+      )}`,
+    },
+  });
+  return await data.json();
+}
+
+async function getJitoTip() {
+  const data = await fetch("http://localhost:8333/jito-tip", {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -166,9 +177,12 @@ async function buildSwapTx(
 export async function batchSendTx(
   tokenMint: string,
   tradeParams: {
-    // keypair: Keypair;
     walletId: number;
-    param: { side: "sell" | "buy"; amountIn: bigint };
+    param: {
+      side: "sell" | "buy";
+      // amountIn: bigint;
+      amountIn: number;
+    };
   }[],
   confirmed = false
 ) {
@@ -183,19 +197,24 @@ export async function batchSendTx(
     };
   }
 
-  const {
-    msg: getPoolInfoMsg,
-    data: poolInfoData,
-  } = await getPoolInfo();
+  const { msg: getJitoTipMsg, data: jitoTipAmount } = await getJitoTip();
+  if (getJitoTipMsg !== "success") {
+    return {
+      msg: `failed to get jito tip: ${getJitoTipMsg}`,
+      data: null,
+    };
+  }
+
+  const { msg: getPoolInfoMsg, data: poolInfoData } = await getPoolInfo();
   if (getPoolInfoMsg !== "success") {
     return {
       msg: `failed to get pool info: ${getPoolInfoMsg}`,
       data: null,
     };
   }
-  console.log({ poolInfoData });
+  // console.log({ poolInfoData });
   const { poolInfo, poolKeys } = poolInfoData;
-  console.dir(poolInfo);
+  // console.dir(poolInfo);
   const baseIn = tokenMint === poolInfo.mintA.address;
 
   const { msg: getWalletsMsg, data: wallets } = await getWallets(pubkey);
@@ -205,28 +224,23 @@ export async function batchSendTx(
       data: null,
     };
   }
+
   if (
     tradeParams.filter((t) =>
       wallets.find((w: { id: number }) => w.id === t.walletId)
     ).length !== tradeParams.length
   ) {
     return {
-      msg: "failed to get wallets",
+      msg: "invalid wallet id",
       data: null,
     };
   }
-
-  console.log(`start getting jito tip account: ${Date.now() / 1000}`);
-  const jitoTipAmount = await getTip();
-  console.log(`jito tip amount: ${jitoTipAmount}`);
 
   console.log(`start getting latest blockhash: ${Date.now() / 1000}`);
   const latestBlock = await connection.getLatestBlockhash("confirmed");
 
   console.log(`start getting pool info from rpc: ${Date.now() / 1000}`);
-
   const response = await getReserve();
-
   console.log(`end getting pool info from rpc: ${Date.now() / 1000}`);
 
   const status = new BN(response.status).toNumber();
@@ -238,7 +252,29 @@ export async function batchSendTx(
       const mintOut =
         t.param.side === "buy" ? new PublicKey(tokenMint) : NATIVE_MINT;
 
-      const amountIn = new BN(t.param.amountIn.toString());
+      const input: "base" | "quote" = baseIn
+        ? t.param.side === "buy"
+          ? "quote"
+          : "base"
+        : t.param.side === "buy"
+        ? "base"
+        : "quote";
+
+      const amountIn = new BN(
+        new Decimal(t.param.amountIn.toString())
+          .mul(
+            new Decimal(10).pow(
+              new Decimal(
+                input === "base"
+                  ? poolInfo.mintA.decimals
+                  : poolInfo.mintB.decimals
+              )
+            )
+          )
+          .toString()
+      );
+
+      // const amountIn = new BN(t.param.amountIn.toString());
 
       const { baseReserve, quoteReserve } = acc.at(-1)!;
 
@@ -256,13 +292,6 @@ export async function batchSendTx(
         slippage: 0.01, // range: 1 ~ 0.0001, means 100% ~ 0.01%
       });
 
-      const input: "base" | "quote" = baseIn
-        ? t.param.side === "buy"
-          ? "quote"
-          : "base"
-        : t.param.side === "buy"
-        ? "base"
-        : "quote";
       return [
         ...acc,
         {
@@ -314,7 +343,12 @@ export async function batchSendTx(
           mintIn,
           mintOut,
           latestBlock.blockhash,
-          i === array.length - 1 ? { jitoTipAccount, jitoTipAmount } : undefined
+          i === array.length - 1
+            ? {
+                jitoTipAccount: new PublicKey(jitoTipAccount),
+                jitoTipAmount,
+              }
+            : undefined
         )
       )
   );
@@ -325,61 +359,21 @@ export async function batchSendTx(
     bs58.encode(tx.transaction.serialize())
   );
 
-  //   if (transactions.length > 0) {
-  //     if (confirmed) {
-  //       const result = await sendBundle(transactions);
-  //       return { msg: "success", data: result };
-  //     } else {
-  //       const { result } = await jitoClient.sendBundle([transactions]);
-  //       console.log("Bundle ID:", result, `time: ${Date.now() / 1000}`);
-  //       return { msg: "success", data: result };
-  //     }
-  //   }
+  if (transactions.length > 0) {
+    if (confirmed) {
+      const result = await sendBundle(transactions);
+      return { msg: "success", data: result };
+    } else {
+      const { result } = await jitoClient.sendBundle([transactions]);
+      console.log("Bundle ID:", result, `time: ${Date.now() / 1000}`);
+      return { msg: "success", data: result };
+    }
+  }
   return { msg: "failed to send tx", data: null };
 }
 
-// await batchSendTx([
-//   // {
-//   //   keypair: keypairs[1],
-//   //   param: {
-//   //     // side: "buy",
-//   //     // amountIn: BigInt(0.5 * LAMPORTS_PER_SOL),
-//   //     side: "sell",
-//   //     amountIn: 28962199444098253n,
-//   //   },
-//   // },
-//   // {
-//   //   keypair: keypairs[2],
-//   //   param: {
-//   //     // side: "buy",
-//   //     // amountIn: BigInt(0.5 * LAMPORTS_PER_SOL),
-//   //     side: "sell",
-//   //     amountIn: 70013924715166649n,
-//   //   },
-//   // },
-//   // {
-//   //   keypair: keypairs[3],
-//   //   param: {
-//   //     // side: "buy",
-//   //     // amountIn: BigInt(0.5 * LAMPORTS_PER_SOL),
-//   //     side: "sell",
-//   //     amountIn: 43722937532352373n,
-//   //   },
-//   // },
-//   {
-//     keypair: keypairs[5],
-//     param: {
-//       // side: "buy",
-//       // amountIn: BigInt(0.5 * LAMPORTS_PER_SOL),
-//       side: "sell",
-//       amountIn: 70013924715166649n,
-//     },
-//   },
-//   // {
-//   //   keypair: keypairs[0],
-//   //   param: {
-//   //     side: "buy",
-//   //     amountIn: BigInt(0.7 * LAMPORTS_PER_SOL),
-//   //   },
-//   // },
-// ]);
+// console.log(
+//   await batchSendTx("Bim7QGxe9c82wbbGWmdbqorGEzRtRJvECY4s8YSK8oMq", [
+//     { walletId: 1, param: { side: "sell", amountIn: 100 } },
+//   ])
+// );

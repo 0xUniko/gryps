@@ -20,18 +20,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useToast } from "@/hooks/use-toast";
+import { toast, useToast } from "@/hooks/use-toast";
 import { NATIVE_MINT } from "@solana/spl-token";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import Decimal from "decimal.js";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function Home() {
+  const { toast } = useToast();
+
   const [tokenMint, setTokenMint] = useState(
     "Bim7QGxe9c82wbbGWmdbqorGEzRtRJvECY4s8YSK8oMq"
   );
+  const [tokenDecimal, setTokenDecimal] = useState<number | undefined>(
+    undefined
+  );
+
   const [wallets, setWallets] = useState<
     (Wallet & {
       solBalance: string;
@@ -39,15 +46,21 @@ export default function Home() {
       tokenBalance: string;
     })[]
   >([]);
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [addingWallets, setAddingWallets] = useState(false);
   const [walletAmount, setWalletAmount] = useState<number>(1);
-  const [formDataList, setFormDataList] = useState([
+
+  const [formDataList, setFormDataList] = useState<
     {
-      walletId: 0,
-      side: "buy" as "buy" | "sell",
-      amount: 0,
+      walletId: number | "";
+      side: "buy" | "sell";
+      amount: number | "";
+    }[]
+  >([
+    {
+      walletId: "",
+      side: "buy",
+      amount: "",
     },
   ]);
 
@@ -92,7 +105,12 @@ export default function Home() {
             tokenBalance:
               tokenBalance.data === null
                 ? tokenBalance.msg
-                : (Number(tokenBalance.data) / 10 ** 6).toString(),
+                : // : (Number(tokenBalance.data) / 10 ** 6).toString(),
+                tokenDecimal
+                ? new Decimal(tokenBalance.data.toString())
+                    .div(10 ** tokenDecimal)
+                    .toString()
+                : "请先初始化代币池子监听",
           };
         })
       );
@@ -171,6 +189,11 @@ export default function Home() {
           title: "成功",
           description: "初始化成功",
         });
+        setTokenDecimal(
+          tokenMint === result.data.poolInfo.mintA.address
+            ? result.data.poolInfo.mintA.decimals
+            : result.data.poolInfo.mintB.decimals
+        );
       } else {
         throw new Error(result.msg);
       }
@@ -188,30 +211,54 @@ export default function Home() {
 
   const addForm = () => {
     if (formDataList.length < 5) {
-      setFormDataList([
+      setFormDataList((formDataList) => [
         ...formDataList,
         {
-          walletId: 0,
-          side: "buy" as "buy" | "sell",
-          amount: 0,
+          walletId: "",
+          side: "buy",
+          amount: "",
         },
       ]);
     }
   };
 
   const removeForm = (index: number) => {
-    setFormDataList(formDataList.filter((_, i) => i !== index));
+    setFormDataList((formDataList) =>
+      formDataList.filter((_, i) => i !== index)
+    );
   };
 
   const handleSubmit = async () => {
+    // 修改验证逻辑
+    const invalidForm = formDataList.some(
+      (form) =>
+        form.walletId === "" || // 检查是否为空
+        form.walletId < 0 ||
+        !form.amount ||
+        form.amount <= 0
+    );
+
+    if (invalidForm) {
+      toast({
+        variant: "destructive",
+        title: "错误",
+        description: "钱包ID必须大于等于0，代币数量必须大于0",
+      });
+      return;
+    }
+
     try {
       // 这里处理多个表单的提交
       // console.log("提交交易:", formDataList);
       const { msg, data } = await batchSendTx(
         tokenMint,
         formDataList.map((d) => ({
-          walletId: d.walletId,
-          param: { side: d.side, amountIn: BigInt(d.amount) },
+          walletId: d.walletId === "" ? 0 : d.walletId,
+          param: {
+            side: d.side,
+            // amountIn: BigInt(d.amount)
+            amountIn: d.amount === "" ? 0 : d.amount,
+          },
         }))
       );
       if (msg === "success") {
@@ -242,6 +289,7 @@ export default function Home() {
         <h2 className="text-2xl font-bold">开始Raydium池子监听</h2>
         <div className="flex gap-4 max-w-md">
           <Input
+            disabled
             placeholder="输入代币地址"
             value={tokenMint}
             onChange={(e) => setTokenMint(e.target.value)}
@@ -326,12 +374,20 @@ export default function Home() {
               <label className="text-sm font-medium">钱包 ID</label>
               <Input
                 type="number"
+                min={0}
                 value={formData.walletId}
                 onChange={(e) =>
-                  setFormDataList(
+                  setFormDataList((formDataList) =>
                     formDataList.map((item, i) =>
                       i === index
-                        ? { ...item, walletId: parseInt(e.target.value) }
+                        ? {
+                            ...item,
+                            walletId: (e.target.value === ""
+                              ? ""
+                              : Math.max(0, parseInt(e.target.value))) as
+                              | number
+                              | "",
+                          }
                         : item
                     )
                   )
@@ -348,7 +404,7 @@ export default function Home() {
                 onValueChange={(value: "buy" | "sell") => {
                   if (value) {
                     // 确保有值时才更新
-                    setFormDataList(
+                    setFormDataList((formDataList) =>
                       formDataList.map((item, i) =>
                         i === index ? { ...item, side: value } : item
                       )
@@ -372,13 +428,21 @@ export default function Home() {
               </label>
               <Input
                 type="number"
-                step="0.000001"
+                min={0}
+                step="0.00000001"
                 value={formData.amount}
                 onChange={(e) =>
-                  setFormDataList(
+                  // console.log(Number(e.target.value))
+                  setFormDataList((formDataList) =>
                     formDataList.map((item, i) =>
                       i === index
-                        ? { ...item, amount: parseFloat(e.target.value) }
+                        ? {
+                            ...item,
+                            amount:
+                              e.target.value === ""
+                                ? ""
+                                : (Number(e.target.value) as number | ""),
+                          }
                         : item
                     )
                   )

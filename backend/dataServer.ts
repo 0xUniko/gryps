@@ -14,6 +14,12 @@ import { Hono } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
 import { getTip, jitoClient } from "../lib/jito";
 
+const app = new Hono();
+app.use(
+  "/*",
+  bearerAuth({ token: Buffer.from(process.env.HELIUS_RPC!).toString("base64") })
+);
+
 const db = Database.open("database.db");
 
 const connection = new Connection(process.env.HELIUS_RPC!);
@@ -26,7 +32,7 @@ const raydium = await Raydium.load({
   blockhashCommitment: "confirmed",
 });
 
-class PoolReserve {
+class Pool {
   baseReserve?: BN;
   quoteReserve?: BN;
   lpInfo?: ReturnType<typeof liquidityStateV4Layout.decode>;
@@ -131,6 +137,8 @@ class PoolReserve {
         encoding: "jsonParsed",
       }
     );
+
+    return { poolInfo, poolKeys };
   }
   get value() {
     assert(this.baseReserve !== undefined, "server is not initialised");
@@ -168,6 +176,54 @@ class PoolReserve {
   }
 }
 
+const pool = new Pool();
+
+app.post("/pool/init", async (c) => {
+  try {
+    const { pool_id } = await c.req.json();
+    console.log("initing pool...");
+    const { poolInfo, poolKeys } = await pool.init(pool_id);
+    return c.json({
+      msg: "success",
+      data: { poolInfo, poolKeys },
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
+app.get("/reserve", (c) => {
+  try {
+    return c.json({
+      msg: "success",
+      data: pool.value,
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
+app.get("/pool-info", async (c) => {
+  try {
+    const { poolInfo, poolKeys } = pool.value;
+    return c.json({
+      msg: "success",
+      data: { poolInfo, poolKeys },
+    });
+  } catch (error) {
+    return c.json({
+      msg: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    });
+  }
+});
+
 class Jito {
   jitoTip?: number;
   private updateInterval?: Timer;
@@ -199,7 +255,9 @@ class Jito {
     this.jitoTip = await getTip(tick);
     this.updateInterval = setInterval(async () => {
       this.jitoTip = await getTip(tick);
-    }, 600000);
+    }, 60000);
+
+    this.jitoTipAccount = new PublicKey(await jitoClient.getRandomTipAccount());
     this.updateJitoTipInterval = setInterval(async () => {
       this.jitoTipAccount = new PublicKey(
         await jitoClient.getRandomTipAccount()
@@ -217,32 +275,8 @@ class Jito {
   }
 }
 
-const poolReserve = new PoolReserve();
 const jito = new Jito();
 await jito.init();
-
-const app = new Hono();
-app.use(
-  "/*",
-  bearerAuth({ token: Buffer.from(process.env.HELIUS_RPC!).toString("base64") })
-);
-
-app.post("/pool/init", async (c) => {
-  try {
-    const { pool_id } = await c.req.json();
-    console.log("initing pool...");
-    await poolReserve.init(pool_id);
-    return c.json({
-      msg: "success",
-      data: null,
-    });
-  } catch (error) {
-    return c.json({
-      msg: error instanceof Error ? error.message : "Unknown error",
-      data: null,
-    });
-  }
-});
 
 app.post("/jito/init", async (c) => {
   try {
@@ -252,35 +286,6 @@ app.post("/jito/init", async (c) => {
     return c.json({
       msg: "success",
       data: null,
-    });
-  } catch (error) {
-    return c.json({
-      msg: error instanceof Error ? error.message : "Unknown error",
-      data: null,
-    });
-  }
-});
-
-app.get("/reserve", (c) => {
-  try {
-    return c.json({
-      msg: "success",
-      data: poolReserve.value,
-    });
-  } catch (error) {
-    return c.json({
-      msg: error instanceof Error ? error.message : "Unknown error",
-      data: null,
-    });
-  }
-});
-
-app.get("/pool-info", async (c) => {
-  try {
-    const { poolInfo, poolKeys } = poolReserve.value;
-    return c.json({
-      msg: "success",
-      data: { poolInfo, poolKeys },
     });
   } catch (error) {
     return c.json({
@@ -349,7 +354,7 @@ class WalletCache {
 
   get(user: string) {
     const cached = this.storage.get(user);
-    if (cached !== null) {
+    if (cached) {
       return cached;
     } else {
       let query = `
