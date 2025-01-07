@@ -39,6 +39,7 @@ export default function SignIn() {
 
       setIsLoading(false);
 
+      console.log({ msg, data });
       if (data) {
         router.push("/");
       } else {

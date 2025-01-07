@@ -40,6 +40,7 @@ export default function Home() {
   const [tokenMint, setTokenMint] = useState(
     "Bim7QGxe9c82wbbGWmdbqorGEzRtRJvECY4s8YSK8oMq"
   );
+  // raydium.api.fetchPoolByMints
   const [tokenDecimal, setTokenDecimal] = useState<number | undefined>(
     undefined
   );
