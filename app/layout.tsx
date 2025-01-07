@@ -1,5 +1,4 @@
 import AppWalletProvider from "@/components/AppWalletProvider";
-import { Root } from "@/components/Root/Root";
 import { Toaster } from "@/components/ui/toaster";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import type { Metadata } from "next";
@@ -31,9 +30,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AppWalletProvider>
-          <Root>{children}</Root>
-        </AppWalletProvider>
+        <AppWalletProvider>{children}</AppWalletProvider>
         <Toaster />
       </body>
     </html>
