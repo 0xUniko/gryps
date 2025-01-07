@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"bun --watch backend/dataServer.ts\" \"next dev --turbopack\"",
+    "pre": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
