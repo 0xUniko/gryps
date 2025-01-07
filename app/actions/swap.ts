@@ -9,18 +9,10 @@ import {
   Raydium,
   TxBuilder,
   TxVersion,
-  confirmTransaction,
   makeAMMSwapInstruction,
 } from "@raydium-io/raydium-sdk-v2";
 import { NATIVE_MINT, getAssociatedTokenAddress } from "@solana/spl-token";
-import {
-  Connection,
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  SystemProgram,
-  VersionedTransaction,
-} from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import BN from "bn.js";
 import bs58 from "bs58";
 import Decimal from "decimal.js";
@@ -36,8 +28,10 @@ const raydium = await Raydium.load({
   blockhashCommitment: "confirmed",
 });
 
+const dataserver = `http://localhost:${process.env.DATASERVER_PORT}`;
+
 async function getPoolInfo() {
-  const data = await fetch("http://localhost:8333/pool-info", {
+  const data = await fetch(`${dataserver}/pool/info`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -50,7 +44,7 @@ async function getPoolInfo() {
 }
 
 async function getReserve() {
-  const data = await fetch("http://localhost:8333/reserve", {
+  const data = await fetch(`${dataserver}/pool/reserve`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -63,7 +57,7 @@ async function getReserve() {
 }
 
 async function getJitoTip() {
-  const data = await fetch("http://localhost:8333/jito-tip", {
+  const data = await fetch(`${dataserver}/jito/tip`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -76,7 +70,7 @@ async function getJitoTip() {
 }
 
 async function getJitoTipAccount() {
-  const data = await fetch("http://localhost:8333/jito-tip-account", {
+  const data = await fetch(`${dataserver}/jito/tip-account`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -89,7 +83,7 @@ async function getJitoTipAccount() {
 }
 
 async function getWallets(user: string) {
-  const data = await fetch(`http://localhost:8333/wallets/cache?user=${user}`, {
+  const data = await fetch(`${dataserver}/wallets/cache?user=${user}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -212,9 +206,7 @@ export async function batchSendTx(
       data: null,
     };
   }
-  // console.log({ poolInfoData });
   const { poolInfo, poolKeys } = poolInfoData;
-  // console.dir(poolInfo);
   const baseIn = tokenMint === poolInfo.mintA.address;
 
   const { msg: getWalletsMsg, data: wallets } = await getWallets(pubkey);
@@ -240,10 +232,16 @@ export async function batchSendTx(
   const latestBlock = await connection.getLatestBlockhash("confirmed");
 
   console.log(`start getting pool info from rpc: ${Date.now() / 1000}`);
-  const response = await getReserve();
+  const { msg: getReserveMsg, data: reserveData } = await getReserve();
+  if (getReserveMsg !== "success") {
+    return {
+      msg: `failed to get reserve: ${getReserveMsg}`,
+      data: null,
+    };
+  }
   console.log(`end getting pool info from rpc: ${Date.now() / 1000}`);
 
-  const status = new BN(response.status).toNumber();
+  const status = new BN(reserveData.status).toNumber();
 
   const trades = tradeParams.reduce(
     (acc, t) => {
@@ -318,8 +316,8 @@ export async function batchSendTx(
     },
     [
       {
-        baseReserve: new BN(response.base_reserve),
-        quoteReserve: new BN(response.quote_reserve),
+        baseReserve: new BN(reserveData.baseReserve),
+        quoteReserve: new BN(reserveData.quoteReserve),
         keypair: new Keypair(),
         // walletId: -1,
         amountIn: new BN(0),

@@ -145,8 +145,8 @@ class Pool {
     assert(this.quoteReserve !== undefined, "server is not initialised");
     assert(this.lpInfo !== undefined, "server is not initialised");
     return {
-      base_reserve: this.baseReserve.toString(),
-      quote_reserve: this.quoteReserve.toString(),
+      baseReserve: this.baseReserve.toString(),
+      quoteReserve: this.quoteReserve.toString(),
       status: this.lpInfo.status.toString(),
       poolInfo: this.poolInfo,
       poolKeys: this.poolKeys,
@@ -195,11 +195,12 @@ app.post("/pool/init", async (c) => {
   }
 });
 
-app.get("/reserve", (c) => {
+app.get("/pool/reserve", (c) => {
   try {
+    const { status, baseReserve, quoteReserve } = pool.value;
     return c.json({
       msg: "success",
-      data: pool.value,
+      data: { status, baseReserve, quoteReserve },
     });
   } catch (error) {
     return c.json({
@@ -209,7 +210,7 @@ app.get("/reserve", (c) => {
   }
 });
 
-app.get("/pool-info", async (c) => {
+app.get("/pool/info", async (c) => {
   try {
     const { poolInfo, poolKeys } = pool.value;
     return c.json({
@@ -295,7 +296,7 @@ app.post("/jito/init", async (c) => {
   }
 });
 
-app.get("/jito-tip", (c) => {
+app.get("/jito/tip", (c) => {
   try {
     return c.json({
       msg: "success",
@@ -309,7 +310,7 @@ app.get("/jito-tip", (c) => {
   }
 });
 
-app.get("/jito-tip-account", (c) => {
+app.get("/jito/tip-account", (c) => {
   try {
     return c.json({
       msg: "success",
@@ -412,6 +413,6 @@ app.get("/wallets/cache", async (c) => {
 });
 
 export default {
-  port: 8333,
+  port: process.env.DATASERVER_PORT,
   fetch: app.fetch,
 };

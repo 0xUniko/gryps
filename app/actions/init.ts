@@ -10,16 +10,19 @@ export async function initPool(tokenMint: string): Promise<Res<any>> {
   }
   const poolId = "4ZRWV4zp9C5BxSgUVMAj4fqpJ2h1azL4yBWASjisoEbL";
   try {
-    const data = await fetch("http://localhost:8333/pool/init", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${Buffer.from(process.env.HELIUS_RPC!).toString(
-          "base64"
-        )}`,
-      },
-      body: JSON.stringify({ pool_id: poolId }),
-    });
+    const data = await fetch(
+      `http://localhost:${process.env.DATASERVER_PORT}/pool/init`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Buffer.from(
+            process.env.HELIUS_RPC!
+          ).toString("base64")}`,
+        },
+        body: JSON.stringify({ pool_id: poolId }),
+      }
+    );
 
     return await data.json();
   } catch (error) {

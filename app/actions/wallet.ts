@@ -4,9 +4,8 @@ import { connection, db } from "@/lib/instances";
 import { Res } from "@/lib/types";
 import { mnemonicToKeypair } from "@/lib/utils";
 import { getAssociatedTokenAddress } from "@solana/spl-token";
-import { Keypair, PublicKey, SolanaJSONRPCError } from "@solana/web3.js";
-import { generateMnemonic, mnemonicToSeedSync } from "bip39";
-import { derivePath } from "ed25519-hd-key";
+import { PublicKey, SolanaJSONRPCError } from "@solana/web3.js";
+import { generateMnemonic } from "bip39";
 import { verifyAuth } from "./auth";
 
 export type Wallet = {
@@ -19,15 +18,18 @@ export async function getWallets(): Promise<Res<Wallet[]>> {
   const pubkey = await verifyAuth();
 
   try {
-    const data = await fetch(`http://localhost:8333/wallets?user=${pubkey}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${Buffer.from(process.env.HELIUS_RPC!).toString(
-          "base64"
-        )}`,
-      },
-    });
+    const data = await fetch(
+      `http://localhost:${process.env.DATASERVER_PORT}/wallets?user=${pubkey}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Buffer.from(
+            process.env.HELIUS_RPC!
+          ).toString("base64")}`,
+        },
+      }
+    );
     const { msg, data: wallets } = await data.json();
     if (msg === "success") {
       return {
